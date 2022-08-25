@@ -1,3 +1,7 @@
+import base64
+import hashlib
+import hmac
+
 import requests
 import decimal
 import time
@@ -5,6 +9,10 @@ import time
 
 
 URL = 'https://api.kucoin.com'
+KUCOIN_ORDERS = '/api/v1/orders'
+
+
+
 
 def get_currency_moving_average(currency_code, number_of_months):
     av_monthly_data_url = f'https://www.alphavantage.co/query?function=DIGITAL_CURRENCY_MONTHLY&symbol={currency_code}&market=USD&apikey=8AF6LT7I8TKBJ173'
@@ -22,6 +30,12 @@ def get_currency_moving_average(currency_code, number_of_months):
 
     return 0
 
+def make_limit_order(currency_code):
+    print('made order')
+    headers = create_header()
+    payload = {'clientOid': '161375038', 'side': 'buy', 'symbol': 'BTC-USDT', 'type': 'market'}
+    result = requests.post(URL + KUCOIN_ORDERS, params=payload, headers=headers)
+    print(result.text)
 def get_currency_history(currency_code):
     ticker = requests.get(URL + '/api/v1/market/histories?symbol=' + currency_code + '-USDT').json()
     return ticker
@@ -31,16 +45,28 @@ def get_current_currency_price(currency_code):
     ticker = requests.get(URL + '/api/v1/prices', params=payload).json()
     current_price = ticker['data'][currency_code]
     return decimal.Decimal(current_price)
-
+def create_header():
+    time_now = int(time.time() * 1000)
+    api_key = "63066e7e650b2d00012fa331"
+    api_secret = "d2e0887c-456d-417f-ba5d-d1157ae140cd"
+    api_passphrase = "1234567"
+    str_to_sign = str(time_now) + 'POST' + '/api/v2/accounts'
+    signature = base64.b64encode(
+        hmac.new(api_secret.encode('utf-8'), str_to_sign.encode('utf-8'), hashlib.sha256).digest())
+    passphrase = base64.b64encode(
+        hmac.new(api_secret.encode('utf-8'), api_passphrase.encode('utf-8'), hashlib.sha256).digest())
+    headers = {
+        "KC-API-SIGN": signature,
+        "KC-API-TIMESTAMP": str(time_now),
+        "KC-API-KEY": api_key,
+        "KC-API-PASSPHRASE": passphrase,
+        "KC-API-KEY-VERSION": '2',
+        "Content-Type": "application/json"  # specifying content type or using json=data in request
+    }
+    return headers
 
 if __name__ == "__main__":
-    print(get_currency_moving_average('BTC', 4))
-    # while True:
-    #     last_recorded_stock_price = get_current_currency_price('LOKI')
-    #     time.sleep(60)
-    #     if get_current_currency_price('LOKI') > last_recorded_stock_price * decimal.Decimal(1):
-    #         print('Selling the stock right now')
-    #     elif get_current_currency_price('LOKI') < last_recorded_stock_price * decimal.Decimal(1):
-    #         print('Buying the stock right now')
-    #     else:
-    #         print('Doing nothing')
+    #print(get_currency_moving_average('BTC', 4))
+    #print(get_currency_moving_average('BTC', 2))
+
+    make_limit_order('BTC')
