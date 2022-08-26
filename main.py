@@ -12,13 +12,26 @@ import time
 
 URL = 'https://api.kucoin.com'
 KUCOIN_ORDERS = '/api/v1/orders'
+KUCOIN_CANDLES = '/api/v1/market/candles'
 
 API_KEY = "63066e7e650b2d00012fa331"
 API_SECRET = "d2e0887c-456d-417f-ba5d-d1157ae140cd"
 API_PASSPHRASE = "1234567"
 
-
-def get_currency_moving_average(currency_code, number_of_months):
+def get_average_currency_price(currency_pair, time_period, interval, start_time=0, end_time=0):
+    #default interval goes back two years
+    payload = {'symbol': currency_pair, 'startAt': start_time, 'endAt': end_time, 'type': time_period}
+    ticker = requests.get(URL + KUCOIN_CANDLES, params=payload).json()
+    closing_price_index = 2
+    counter = 0
+    avg_closing_price_sum = 0
+    for array in ticker['data']:
+        if counter >= interval:
+            return avg_closing_price_sum / interval
+        avg_closing_price_sum += float(array[closing_price_index])
+        counter += 1
+    return 0
+def get_currency_moving_average_USD(currency_code, number_of_months):
     av_monthly_data_url = f'https://www.alphavantage.co/query?function=DIGITAL_CURRENCY_MONTHLY&symbol={currency_code}&market=USD&apikey=8AF6LT7I8TKBJ173'
     my_sum = 0
     counter = 0
@@ -34,9 +47,9 @@ def get_currency_moving_average(currency_code, number_of_months):
 
     return 0
 
-def make_limit_order(base_currency_symbol, quote_currency_symbol, quote_amount):
+def make_limit_order(base_currency_symbol, quote_currency_symbol, quote_amount, side):
     order_id = random.getrandbits(128)
-    payload = {'clientOid': order_id, 'side': 'buy',
+    payload = {'clientOid': order_id, 'side': side,
                'symbol': f'{base_currency_symbol}-{quote_currency_symbol}'
                , 'type': 'market', 'funds': f'{quote_amount}'}
     payload_json = json.dumps(payload)
@@ -72,9 +85,11 @@ def create_header(method, api_key, api_secret, api_passphrase, data):
     }
     return headers
 
-if __name__ == "__main__":
-    #print(get_currency_moving_average('BTC', 4))
-    #print(get_currency_moving_average('BTC', 2))
 
-    make_limit_order('BTC', 'USDT', 2)
+if __name__ == "__main__":
+    #print(get_currency_moving_average_USD('BTC', 4))
+    #print(get_currency_moving_average_USD('BTC', 2))
+
+    #make_limit_order('BTC', 'USDT', 2, 'sell')
+    print(get_average_currency_price('ETH-BTC', '1week', 8, 0, 0))
     #test_func()
