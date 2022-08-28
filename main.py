@@ -18,6 +18,8 @@ API_KEY = "63066e7e650b2d00012fa331"
 API_SECRET = "d2e0887c-456d-417f-ba5d-d1157ae140cd"
 API_PASSPHRASE = "1234567"
 
+WEEK_TIME_UNIX = 604800
+
 def get_average_currency_price(currency_pair, time_period, interval, start_time=0, end_time=0):
     #default interval goes back two years
     payload = {'symbol': currency_pair, 'startAt': start_time, 'endAt': end_time, 'type': time_period}
@@ -31,21 +33,6 @@ def get_average_currency_price(currency_pair, time_period, interval, start_time=
         avg_closing_price_sum += float(array[closing_price_index])
         counter += 1
     return 0
-def get_currency_moving_average_USD(currency_code, number_of_months):
-    av_monthly_data_url = f'https://www.alphavantage.co/query?function=DIGITAL_CURRENCY_MONTHLY&symbol={currency_code}&market=USD&apikey=8AF6LT7I8TKBJ173'
-    my_sum = 0
-    counter = 0
-    ticker = requests.get(av_monthly_data_url).json()
-    for data in ticker:
-        for month in ticker[data]:
-            for data_stored_in_month in ticker[data][month]:
-                if counter < number_of_months and data_stored_in_month == '4a. close (USD)':
-                    my_sum += float(ticker[data][month][data_stored_in_month])
-                    counter += 1
-                if counter >= number_of_months:
-                    return my_sum/number_of_months
-
-    return 0
 
 def make_limit_order(base_currency_symbol, quote_currency_symbol, quote_amount, side):
     order_id = random.getrandbits(128)
@@ -56,15 +43,11 @@ def make_limit_order(base_currency_symbol, quote_currency_symbol, quote_amount, 
     headers = create_header('POST', API_KEY, API_SECRET, API_PASSPHRASE, payload_json)
     result = requests.request('POST', URL + KUCOIN_ORDERS, data=payload_json, headers=headers)
     print(result.json())
-def get_currency_history(currency_code):
-    ticker = requests.get(URL + '/api/v1/market/histories?symbol=' + currency_code + '-USDT').json()
-    return ticker
-
 def get_current_currency_price(currency_code):
     payload = {'base': 'USD', 'currencies': currency_code}
     ticker = requests.get(URL + '/api/v1/prices', params=payload).json()
     current_price = ticker['data'][currency_code]
-    return decimal.Decimal(current_price)
+    return float(current_price)
 def create_header(method, api_key, api_secret, api_passphrase, data):
     time_now = int(time.time() * 1000)
     api_key = api_key
@@ -85,11 +68,52 @@ def create_header(method, api_key, api_secret, api_passphrase, data):
     }
     return headers
 
-
+def make_historical_data_points(currency_pair, time_period, start_time=0, end_time=0):
+    payload = {'symbol': currency_pair, 'startAt': start_time, 'endAt': end_time, 'type': time_period}
+    ticker = requests.get(URL + KUCOIN_CANDLES, params=payload).json()
+    balance = {'time': [], 'closing_price': []}
+    for array in reversed(ticker['data']):
+        balance['time'].append(array[0])
+        balance['closing_price'].append(array[2])
+    return balance
 if __name__ == "__main__":
-    #print(get_currency_moving_average_USD('BTC', 4))
-    #print(get_currency_moving_average_USD('BTC', 2))
+    #moving_average_50 = get_average_currency_price('BTC-USDT', '1week', 8)
+    past_3_month_daily_closing_prices = make_historical_data_points('BTC-USDT', '1day')
+    #print(make_historical_data_points('BTC-USDT', '1week', 1653004800))
 
-    #make_limit_order('BTC', 'USDT', 2, 'sell')
-    print(get_average_currency_price('ETH-BTC', '1week', 8, 0, 0))
-    #test_func()
+    balance = 10000
+    starting_time = past_3_month_daily_closing_prices['time'][0]
+    end_time = int(starting_time) + (WEEK_TIME_UNIX * 8)
+    #moving_average for past 3 months + 2 months = 232323
+    backtest_moving_average = get_average_currency_price('BTC-USDT', '1week', 8, starting_time, end_time)
+    #closing price of last 3 months = make_historical_data_points('BTC-USDT', '1day') #array
+    index_counter = 0
+    for price in past_3_month_daily_closing_prices['closing_price']:
+        #if time of first order - time of current order > 2 months:
+        if int(past_3_month_daily_closing_prices['time'][0]) - int(past_3_month_daily_closing_prices['time'][index_counter]) > WEEK_TIME_UNIX * 8:
+            #new moving average = from current order time + 2months
+            backtest_moving_average = get_average_currency_price('BTC-USDT', '1week', int(past_3_month_daily_closing_prices['time'][index_counter]) - WEEK_TIME_UNIX * 8, int(past_3_month_daily_closing_prices['time'][index_counter]))
+        else:
+            #if price/moving_average <= 0.85:
+            if float(price)/backtest_moving_average <= 0.85:
+                #buy stock at current price
+                #update balance
+                balance -= price
+                ###############make point on graph based on balance
+            #elif price/moving_average >= 1.15:
+            elif float(price)/backtest_moving_average >= 1.15:
+                #sell stock at current price
+                #update balance
+                balance += price
+                ###############make point on graph based on balance
+            else:
+                pass
+                #do nothing
+                ###############make point on graph based on balance
+    print('This is my balance: ' + balance)
+    #while True:
+     #   current_price = get_current_currency_price('BTC')
+        #if current_price / moving_average_50 <= 0.85:
+        #    print('BUY STOCK')
+        #elif current_price / moving_average_50 >= 1.15:
+        #    print('SELL STOCK')
