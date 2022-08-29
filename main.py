@@ -20,7 +20,7 @@ API_PASSPHRASE = "1234567"
 
 WEEK_TIME_UNIX = 604800
 
-def get_average_currency_price(currency_pair, time_period, interval, start_time=0, end_time=0):
+def get_average_currency_price(currency_pair, time_period, start_time=0, end_time=0):
     #default interval goes back two years
     payload = {'symbol': currency_pair, 'startAt': start_time, 'endAt': end_time, 'type': time_period}
     ticker = requests.get(URL + KUCOIN_CANDLES, params=payload).json()
@@ -28,11 +28,9 @@ def get_average_currency_price(currency_pair, time_period, interval, start_time=
     counter = 0
     avg_closing_price_sum = 0
     for array in ticker['data']:
-        if counter >= interval:
-            return avg_closing_price_sum / interval
         avg_closing_price_sum += float(array[closing_price_index])
         counter += 1
-    return 0
+    return avg_closing_price_sum / counter
 
 def make_limit_order(base_currency_symbol, quote_currency_symbol, quote_amount, side):
     order_id = random.getrandbits(128)
@@ -81,36 +79,43 @@ if __name__ == "__main__":
     past_3_month_daily_closing_prices = make_historical_data_points('BTC-USDT', '1day')
     #print(make_historical_data_points('BTC-USDT', '1week', 1653004800))
 
-    balance = 10000
-    starting_time = past_3_month_daily_closing_prices['time'][0]
-    end_time = int(starting_time) + (WEEK_TIME_UNIX * 8)
+    balance = 100
+    starting_time = int(past_3_month_daily_closing_prices['time'][0])
+    end_time = int(starting_time) + (WEEK_TIME_UNIX * 12)
     #moving_average for past 3 months + 2 months = 232323
-    backtest_moving_average = get_average_currency_price('BTC-USDT', '1week', 8, starting_time, end_time)
+    backtest_moving_average = get_average_currency_price('BTC-USDT', '1week', starting_time, end_time)
     #closing price of last 3 months = make_historical_data_points('BTC-USDT', '1day') #array
     index_counter = 0
+    stock_of_currency = 0
     for price in past_3_month_daily_closing_prices['closing_price']:
-        #if time of first order - time of current order > 2 months:
-        if int(past_3_month_daily_closing_prices['time'][0]) - int(past_3_month_daily_closing_prices['time'][index_counter]) > WEEK_TIME_UNIX * 8:
-            #new moving average = from current order time + 2months
-            backtest_moving_average = get_average_currency_price('BTC-USDT', '1week', int(past_3_month_daily_closing_prices['time'][index_counter]) - WEEK_TIME_UNIX * 8, int(past_3_month_daily_closing_prices['time'][index_counter]))
+        #print(stock_of_currency)
+        #if price/moving_average <= 0.85:
+        if float(price)/backtest_moving_average <= 0.98:
+            #buy stock at current price
+            #update balance
+            if balance > 0:
+                stock_of_currency = float(balance)/float(price)
+                balance -= float(price) * stock_of_currency
+                print("I AM BUYING")
+            ###############make point on graph based on balance
+        #elif price/moving_average >= 1.15:
+        elif float(price)/backtest_moving_average >= 1.02:
+            #sell stock at current price
+            #update balance
+            if stock_of_currency > 0:
+                balance += float(price) * stock_of_currency
+                stock_of_currency = 0
+                print('I AM SELLING')
+            ###############make point on graph based on balance
         else:
-            #if price/moving_average <= 0.85:
-            if float(price)/backtest_moving_average <= 0.85:
-                #buy stock at current price
-                #update balance
-                balance -= price
-                ###############make point on graph based on balance
-            #elif price/moving_average >= 1.15:
-            elif float(price)/backtest_moving_average >= 1.15:
-                #sell stock at current price
-                #update balance
-                balance += price
-                ###############make point on graph based on balance
-            else:
-                pass
-                #do nothing
-                ###############make point on graph based on balance
-    print('This is my balance: ' + balance)
+            pass
+            #print('DO NOTHING')
+            #print(float(price) * stock_of_currency)
+            #do nothing
+            ###############make point on graph based on balance
+    #print(type(stock_of_currency))
+    #print(type(price))
+    print('This is the valuation of current holding: ' + str(stock_of_currency * float(price)))
     #while True:
      #   current_price = get_current_currency_price('BTC')
         #if current_price / moving_average_50 <= 0.85:
