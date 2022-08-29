@@ -8,7 +8,8 @@ import requests
 import decimal
 import time
 
-
+# TODO
+# Keep datapoints and kline request data in memory if requesting same curr data as previoues
 
 URL = 'https://api.kucoin.com'
 KUCOIN_ORDERS = '/api/v1/orders'
@@ -74,48 +75,35 @@ def make_historical_data_points(currency_pair, time_period, start_time=0, end_ti
         balance['time'].append(array[0])
         balance['closing_price'].append(array[2])
     return balance
-if __name__ == "__main__":
-    #moving_average_50 = get_average_currency_price('BTC-USDT', '1week', 8)
-    past_3_month_daily_closing_prices = make_historical_data_points('BTC-USDT', '1day')
-    #print(make_historical_data_points('BTC-USDT', '1week', 1653004800))
 
-    balance = 100
+def backtest_curr_past_3_months(currency_pair, starting_balance, buy_margin, sell_margin):
+    past_3_month_daily_closing_prices = make_historical_data_points(currency_pair, '1day')
+    balance = starting_balance
     starting_time = int(past_3_month_daily_closing_prices['time'][0])
     end_time = int(starting_time) + (WEEK_TIME_UNIX * 12)
-    #moving_average for past 3 months + 2 months = 232323
-    backtest_moving_average = get_average_currency_price('BTC-USDT', '1week', starting_time, end_time)
-    #closing price of last 3 months = make_historical_data_points('BTC-USDT', '1day') #array
-    index_counter = 0
+    backtest_moving_average = get_average_currency_price(currency_pair, '1week', starting_time, end_time)
     stock_of_currency = 0
     for price in past_3_month_daily_closing_prices['closing_price']:
-        #print(stock_of_currency)
-        #if price/moving_average <= 0.85:
-        if float(price)/backtest_moving_average <= 0.98:
-            #buy stock at current price
-            #update balance
+        #Buy when price falls from base index of 1 by buy margin %
+        if float(price) / backtest_moving_average <= 1 - buy_margin:
             if balance > 0:
-                stock_of_currency = float(balance)/float(price)
+                stock_of_currency = float(balance) / float(price)
                 balance -= float(price) * stock_of_currency
-                print("I AM BUYING")
-            ###############make point on graph based on balance
-        #elif price/moving_average >= 1.15:
-        elif float(price)/backtest_moving_average >= 1.02:
-            #sell stock at current price
-            #update balance
+        #Sell when price rises from base index of 1 by sell margin %
+        elif float(price) / backtest_moving_average >= 1 + sell_margin:
             if stock_of_currency > 0:
                 balance += float(price) * stock_of_currency
                 stock_of_currency = 0
-                print('I AM SELLING')
-            ###############make point on graph based on balance
-        else:
-            pass
-            #print('DO NOTHING')
-            #print(float(price) * stock_of_currency)
-            #do nothing
-            ###############make point on graph based on balance
-    #print(type(stock_of_currency))
-    #print(type(price))
-    print('This is the valuation of current holding: ' + str(stock_of_currency * float(price)))
+    if balance != 0:
+        print(f'Final Balance after 3 months: {balance} (In ' + str(currency_pair[currency_pair.find('-') + 1:]) + ')')
+    else:
+        print('Valuation of stock in account waiting to sell: '
+              + str(stock_of_currency * float(price)) + ' (In ' +
+              str(currency_pair[currency_pair.find('-') + 1:]) + ')')
+        print(f'Final balance after 3 months: {balance} (In ' + str(currency_pair[currency_pair.find('-') + 1:]) + ')')
+
+if __name__ == "__main__":
+    backtest_curr_past_3_months('ETH-BTC', 1, 0.02, 0.02)
     #while True:
      #   current_price = get_current_currency_price('BTC')
         #if current_price / moving_average_50 <= 0.85:
